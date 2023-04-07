@@ -30,6 +30,7 @@ def add_file(
     output = subprocess.run(cmd, capture_output=True, cwd=cwd)
     # print('add_file, stdout:', output.stdout.decode())
     # print('add_file, stderr:', output.stderr.decode())
+    return output.returncode, output.stdout.decode(), output.stderr.decode()
 
 def commit(
     desc: str,
@@ -49,6 +50,7 @@ def commit(
     output = subprocess.run(cmd, capture_output=True, cwd=cwd)
     # print('Commit, stdout:', output.stdout.decode())
     # print('Commit, stderr:', output.stderr.decode())
+    return output.returncode, output.stdout.decode(), output.stderr.decode()
 
 def create_file(
     file: pathlib.Path,
@@ -69,3 +71,4 @@ def create_file(
         output = subprocess.run(cmd, capture_output=True, cwd=cwd)
     # print('Create_file, stdout: ', output.stdout.decode())
     # print('Create_file, stderr: ', output.stderr.decode())
+    return output.returncode, output.stdout.decode(), output.stderr.decode()
