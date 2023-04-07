@@ -6,6 +6,10 @@ import subprocess
 
 from typing import Iterable, Iterator, Any
 
+
+first_commit_hash = 'null'
+
+
 def pairwise(iterable: Iterable[Any]) -> Iterator[tuple[Any, Any]]:
     """
     Return paired elements.
