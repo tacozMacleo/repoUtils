@@ -2,7 +2,7 @@
 import argparse
 import datetime
 import pathlib
-import pickle
+import itertools
 
 from dataclasses import dataclass
 
@@ -30,13 +30,23 @@ class CommitInfo:
     files: list[pathlib.Path]
 
 
+def shorten_path(filter_path: pathlib.Path, file_path: pathlib.Path) -> pathlib.Path:
+    r_path: tuple[str, ...]
+    for x, y in itertools.zip_longest(filter_path.parts, file_path.parts):
+        if x != y: break
+    r_path = file_path.parts[file_path.parts.index(y):]
+    return pathlib.Path('/'.join(r_path))
+
+
+def fix_diff_path(old_path: pathlib.Path, new_path: pathlib.Path, diff: bytes) -> bytes:
+    return diff.replace(
+        str(old_path).encode(),  # Old
+        str(new_path).encode(),  # New
+        3 if b'/dev/null' in diff else 4  # Count
+    )
+
+
 def generate_repo_info(repo_path: pathlib.Path) -> list[CommitInfo]:
-    if not repo_path.is_dir():
-        raise ValueError('repo Path need to be to the repo Root folder.')
-    hg_repo_path = repo_path / '.hg'
-    if not hg_repo_path.exists():
-        raise ValueError('No repo foudn in the given folder.')
-    
     hash_length = len(hg_api.get_hashs(cwd=repo_path))
 
     r_data: list[CommitInfo] = []
@@ -67,6 +77,46 @@ def generate_repo_info(repo_path: pathlib.Path) -> list[CommitInfo]:
     return r_data
 
 
+def transfer_repo(
+    data: list[CommitInfo],
+    src_repo: pathlib.Path,
+    dst_repo: pathlib.Path,
+    file_filter: pathlib.Path,
+    reducer: bool,
+) -> None:
+    something_added: bool = False
+    with Progress() as progress:
+        task_commit = progress.add_task(f"Checking commit...", total=len(data))
+        for commit in data:
+            progress.update(task_commit, description=f"Checking <{commit.hash}>")
+            file_task = progress.add_task(f"Checking files.", total=len(commit.files))
+            for file in commit.files:
+                if file_filter in file.parents or file_filter == file:
+                    progress.update(file_task, description=f'Adding: {file}')
+                    diff = hg_api.get_file_diff(hash=commit.hash, file_name=file, cwd=src_repo)
+                    if reducer:
+                        old_path = file
+                        file = shorten_path(file_filter, file)
+                        diff = fix_diff_path(old_path, file, diff)
+                    if len(diff) <= 1:
+                        progress.console.print(f'[bold red]Warning Empty Diff for: [/bold red] {file}')
+                    git_api.create_file(file=file, diff=diff, cwd=dst_repo)
+                    git_api.add_file(file_name=file, cwd=dst_repo)
+                    something_added = True
+                    progress.advance(file_task)
+            progress.update(file_task, visible=False)
+
+            if something_added:
+                git_api.commit(
+                    desc=commit.description,
+                    author=commit.author,
+                    date=commit.date,
+                    cwd=dst_repo,
+                )
+            progress.advance(task_commit)
+            something_added = False
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
@@ -75,6 +125,11 @@ if __name__ == '__main__':
     #     action='store_true',
     #     help='The Repo to parse.'
     # )
+    parser.add_argument(
+        '-s', '--shorten',
+        action='store_true',
+        help='Shorten the path with the filter. (Folders only)'
+    )
     parser.add_argument(
         '-r', '--repo',
         type=pathlib.Path,
@@ -96,9 +151,17 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    data = generate_repo_info(args.repo)
+    if not args.repo.is_dir():
+        exit(-1)
+        console.print('repo Path need to be to the repo Root folder.')
+    if not (args.repo / '.hg').exists():
+        console.print('No repo founded in the given source folder.')
+        exit(-1)
+    if not (args.out / '.git').exists():
+        console.print('No git repo found in the given output folder.')
+        exit(-1)
 
-    something_added: bool = False
+    data = generate_repo_info(args.repo)
 
     verbose = lambda *args, **kwargs: None
 
@@ -112,29 +175,11 @@ if __name__ == '__main__':
         console.print(branch_out)
         console.print(branch_err)
         exit(-3)
-    with Progress() as progress:
-        task_commit = progress.add_task(f"Checking commit...", total=len(data))
-        for commit in data:
-            progress.update(task_commit, description=f"Checking <{commit.hash}>")
-            file_task = progress.add_task(f"Checking files.", total=len(commit.files))
-            for file in commit.files:
-                if args.filter in file.parents or args.filter == file:
-                    progress.update(file_task, description=f'Adding: {file}')
-                    diff = hg_api.get_file_diff(hash=commit.hash, file_name=file, cwd=args.repo)
-                    if len(diff) <= 1:
-                        progress.console.print(f'[bold red]Warning Empty Diff for: [/bold red] {file}')
-                    git_api.create_file(file=file, diff=diff, cwd=args.out)
-                    git_api.add_file(file_name=file, cwd=args.out)
-                    something_added = True
-                    progress.advance(file_task)
-            progress.update(file_task, visible=False)
 
-            if something_added:
-                git_api.commit(
-                    desc=commit.description,
-                    author=commit.author,
-                    date=commit.date,
-                    cwd=args.out,
-                )
-            progress.advance(task_commit)
-            something_added = False
+    transfer_repo(
+        data=data,
+        src_repo=args.repo,
+        dst_repo=args.out,
+        file_filter=args.filter,
+        reducer=args.shorten,
+    )
