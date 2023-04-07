@@ -15,3 +15,6 @@ Example:
 `repo_converter -r Project/superBigProgram -o Project/superPart -f coolPart/`
 
 The above example takes a existent repo `superBigProgram` in the Project folder, and commit all the files that er under the `coolPart` folder,into the new repo `superPart`.
+
+### TODO:
+ * [ ] It do not handle file diffs from the first mercurial commit.
