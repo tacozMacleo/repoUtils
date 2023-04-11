@@ -6,8 +6,8 @@ import itertools
 
 from dataclasses import dataclass
 
-from rich.progress import Progress
-from rich.console import Console
+from rich.progress import Progress  # type: ignore
+from rich.console import Console  # type: ignore
 
 import hg_api
 import git_api
@@ -168,7 +168,7 @@ if __name__ == '__main__':
     # if args.verbose:
     #     args.verbose = console.print
 
-    branch_rc, branch_out, branch_err = git_api.create_branch(cwd=args.out)
+    branch_rc, branch_out, branch_err = git_api.create_branch(branch_name='imported', cwd=args.out)
     if branch_rc != 0:
         console.print('[bold red]Create Branch failed.[/bold red]')
         console.print('Did you remember to create a git repo and make the first commit?')
