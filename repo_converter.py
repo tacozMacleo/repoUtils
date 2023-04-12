@@ -110,6 +110,8 @@ def transfer_repo(
             progress.update(task_commit, description=f"Checking <{commit.hash}>")
             file_task = progress.add_task(f"Checking files.", total=len(commit.files))
 
+            do_last: list[tuple[pathlib.Path, str, bytes]] = []
+
             for file in commit.files:
                 if file_filter in file.parents or file_filter == file:
                     progress.update(file_task, description=f'Adding: {file}')
@@ -123,6 +125,10 @@ def transfer_repo(
                     if len(diff) <= 1:
                         progress.console.print(f'[bold red]Warning Empty Diff for: [/bold red] {file}')
 
+                    if b'deleted file ' in diff:
+                        do_last.append((file, commit.hash, diff))
+                        continue
+
                     rc, *std = git_api.create_file(file=file, diff=diff, cwd=dst_repo)
 
                     if rc != 0:
@@ -132,6 +138,17 @@ def transfer_repo(
                     git_api.add_file(file_name=file, cwd=dst_repo)
                     something_added = True
                     progress.advance(file_task)
+
+            for file, commit_hash, diff in do_last:
+                rc, *std = git_api.create_file(file=file, diff=diff, cwd=dst_repo)
+
+                if rc != 0:
+                    progress.console.print(f'[bold red]Warning Create file error: [/bold red] {commit_hash}\n{std[0]}\n{std[1]}')
+                    progress.console.print(diff)
+
+                git_api.add_file(file_name=file, cwd=dst_repo)
+                something_added = True
+                progress.advance(file_task)
 
             progress.update(file_task, visible=False)
 
