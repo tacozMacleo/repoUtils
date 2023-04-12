@@ -19,8 +19,9 @@ The above example takes a existent repo `superBigProgram` in the Project folder,
 Added option to shorten the folder path from the output repo, by the filter.
 
 ### Known Bugs
- * Files that have been moved. (Since they can be first deleted, then copied)
+ ---
 
 ### TODO:
  * [ ] It do not handle file diffs from the first mercurial commit.
  * [ ] Test the branch only option. Do it even make sense to have it?
+ * [ ] Add option to convert & import all branches as once.
