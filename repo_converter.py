@@ -14,11 +14,6 @@ import git_api
 
 console = Console()
 
-# @dataclass
-# class FileInfo:
-#     file: pathlib.Path
-#     diff: bytes
-
 
 @dataclass
 class CommitInfo:
@@ -27,11 +22,13 @@ class CommitInfo:
     description: str
     branch: str
     hash: str
-    # files: list[FileInfo]
     files: list[pathlib.Path]
 
 
-def shorten_path(filter_path: pathlib.Path, file_path: pathlib.Path) -> pathlib.Path:
+def shorten_path(
+    filter_path: pathlib.Path,
+    file_path: pathlib.Path
+) -> pathlib.Path:
     r_path: tuple[str, ...]
     for x, y in itertools.zip_longest(filter_path.parts, file_path.parts):
         if x != y: break
@@ -39,7 +36,11 @@ def shorten_path(filter_path: pathlib.Path, file_path: pathlib.Path) -> pathlib.
     return pathlib.Path('/'.join(r_path))
 
 
-def fix_diff_path(old_path: pathlib.Path, new_path: pathlib.Path, diff: bytes) -> bytes:
+def fix_diff_path(
+    old_path: pathlib.Path,
+    new_path: pathlib.Path,
+    diff: bytes
+) -> bytes:
     return diff.replace(
         str(old_path).encode(),  # Old
         str(new_path).encode(),  # New
@@ -47,7 +48,10 @@ def fix_diff_path(old_path: pathlib.Path, new_path: pathlib.Path, diff: bytes) -
     )
 
 
-def generate_repo_info(repo_path: pathlib.Path, branch: str | None = None) -> list[CommitInfo]:
+def generate_repo_info(
+    repo_path: pathlib.Path,
+    branch: str | None = None
+) -> list[CommitInfo]:
     hash_length = len(hg_api.get_hashs(cwd=repo_path, branch=branch))
 
     r_data: list[CommitInfo] = []
@@ -58,13 +62,7 @@ def generate_repo_info(repo_path: pathlib.Path, branch: str | None = None) -> li
         for commit_info in hg_api.get_full_info(cwd=repo_path, branch=branch):
             commit_hash, date, auther, desc, branch, files = commit_info
             progress.update(task, description=f"Parsing commit <{commit_hash}>")
-            # files = [
-            #     FileInfo(
-            #         file=file,
-            #         diff=diff,
-            #     )
-            #     for file, diff in hg_api.get_commit_diff(hash=commit_hash, cwd=repo_path)
-            # ]
+
             r_data.append(CommitInfo(
                 date=date,
                 author=auther,
@@ -89,26 +87,34 @@ def transfer_repo(
     something_added: bool = False
     with Progress() as progress:
         task_commit = progress.add_task(f"Checking commit...", total=len(data))
+
         for commit in data:
             progress.update(task_commit, description=f"Checking <{commit.hash}>")
             file_task = progress.add_task(f"Checking files.", total=len(commit.files))
+
             for file in commit.files:
                 if file_filter in file.parents or file_filter == file:
                     progress.update(file_task, description=f'Adding: {file}')
                     diff = hg_api.get_file_diff(hash=commit.hash, file_name=file, cwd=src_repo)
+
                     if reducer:
                         old_path = file
                         file = shorten_path(file_filter, file)
                         diff = fix_diff_path(old_path, file, diff)
+
                     if len(diff) <= 1:
                         progress.console.print(f'[bold red]Warning Empty Diff for: [/bold red] {file}')
+
                     rc, *std = git_api.create_file(file=file, diff=diff, cwd=dst_repo)
+
                     if rc != 0:
                         progress.console.print(f'[bold red]Warning Create file error: [/bold red] {commit.hash}\n{std[0]}\n{std[1]}')
                         progress.console.print(diff)
+
                     git_api.add_file(file_name=file, cwd=dst_repo)
                     something_added = True
                     progress.advance(file_task)
+
             progress.update(file_task, visible=False)
 
             if something_added:
