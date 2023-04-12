@@ -153,12 +153,16 @@ if __name__ == '__main__':
         default=pathlib.Path('.'),
         help='A file filter.'
     )
-
     parser.add_argument(
         '-b', '--branch',
-        type=pathlib.Path,
-        default=pathlib.Path('.'),
+        type=str,
         help='Only apply changes from given branch.'
+    )
+    parser.add_argument(
+        '--branch-dst',
+        type=str,
+        default='imported',
+        help='Set the output destination branch.'
     )
 
 
@@ -184,7 +188,7 @@ if __name__ == '__main__':
     #             console.print(commit)
     #     exit()
 
-    branch_rc, branch_out, branch_err = git_api.create_branch(branch_name='imported', cwd=args.out)
+    branch_rc, branch_out, branch_err = git_api.create_branch(branch_name=args.branch_dst, cwd=args.out)
     if branch_rc != 0:
         console.print('[bold red]Create Branch failed.[/bold red]')
         console.print('Did you remember to create a git repo and make the first commit?')
