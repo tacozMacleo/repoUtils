@@ -22,12 +22,17 @@ def pairwise(iterable: Iterable[Any]) -> Iterator[tuple[Any, Any]]:
 
 
 def get_hashs(
-    cwd: pathlib.Path | str | None = None
+    cwd: pathlib.Path | str | None = None,
+    branch: str | None = None,
 ) -> list[str]:
     # hg log -r : --template '{node}\n'
     if cwd is not None:
         cwd = str(cwd)
+
     cmd = ["hg", "log", "-r", ":", "--template", "{node}\n"]
+
+    if branch is not None:
+        cmd += ['-b', branch]
     output = subprocess.run(cmd, capture_output=True, cwd=cwd)
     return list(filter(lambda x: bool(x), output.stdout.decode().split('\n')))
 
@@ -100,10 +105,12 @@ def get_commit_diff(
 
 def get_full_info(
     cwd: pathlib.Path | str | None = None,
+    branch: str | None = None,
 ) -> list[
         tuple[
             str,
             datetime.datetime,
+            str,
             str,
             str,
             list[pathlib.Path]
@@ -112,7 +119,9 @@ def get_full_info(
     splitter = '-------------------\n'
     if cwd is not None:
         cwd = str(cwd)
-    cmd = ['hg', 'log', '-r', ':', '--template', '{node}\n{date|isodate}\n{author}\n{desc}\n{join(files, "\n")}' + splitter]
+    cmd = ['hg', 'log', '-r', ':', '--template', '{node}\n{date|isodate}\n{author}\n{desc}\n{branch}\n{join(files, "\n")}' + splitter]
+    if branch is not None:
+        cmd += ['-b', branch]
     output = subprocess.run(cmd, capture_output=True, cwd=cwd)
     commit_list: list[str] = output.stdout.decode().split(splitter)
     return_commit_data = []
@@ -123,7 +132,7 @@ def get_full_info(
             continue
 
         date: datetime.datetime = datetime.datetime.fromisoformat(data[1])
-        files : list[pathlib.Path] = [ pathlib.Path(file) for file in data[4:]]
-        return_commit_data.append((data[0], date, data[2], data[3], files))
+        files : list[pathlib.Path] = [ pathlib.Path(file) for file in data[5:]]
+        return_commit_data.append((data[0], date, data[2], data[3], data[4], files))
 
     return return_commit_data
