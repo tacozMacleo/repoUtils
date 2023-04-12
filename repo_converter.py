@@ -3,8 +3,10 @@ import argparse
 import datetime
 import pathlib
 import itertools
+import re
 
 from dataclasses import dataclass
+from typing import Any, Callable
 
 from rich.progress import Progress  # type: ignore
 from rich.console import Console  # type: ignore
@@ -36,15 +38,31 @@ def shorten_path(
     return pathlib.Path('/'.join(r_path))
 
 
-def fix_diff_path(
-    old_path: pathlib.Path,
-    new_path: pathlib.Path,
-    diff: bytes
+def shorten_diff_file_path(
+    shorten_by: pathlib.Path,
+    diff: bytes,
 ) -> bytes:
+
+    first_regex: bytes = b'diff --git a/(.*) b/(.*)\n'
+    files = re.search(first_regex, diff)
+
+    if files is None:
+        return diff
+
+    old_from_file, old_to_file = map(lambda x: pathlib.Path(x.decode()), files.groups())
+    new_from_file = shorten_path(shorten_by, old_from_file)
+    new_to_file = shorten_path(shorten_by, old_to_file)
+
+    # count = 3 if b'copy from ' in diff else 2
+
     return diff.replace(
-        str(old_path).encode(),  # Old
-        str(new_path).encode(),  # New
-        3 if b'/dev/null' in diff else 4  # Count
+        str(old_from_file).encode(),  # Old
+        str(new_from_file).encode(),  # New
+        # count  # Count
+    ).replace(
+        str(old_to_file).encode(),  # Old
+        str(new_to_file).encode(),  # New
+        # count  # Count
     )
 
 
@@ -100,7 +118,7 @@ def transfer_repo(
                     if reducer:
                         old_path = file
                         file = shorten_path(file_filter, file)
-                        diff = fix_diff_path(old_path, file, diff)
+                        diff = shorten_diff_file_path(file_filter, diff)
 
                     if len(diff) <= 1:
                         progress.console.print(f'[bold red]Warning Empty Diff for: [/bold red] {file}')
