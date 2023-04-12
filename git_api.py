@@ -37,9 +37,7 @@ def commit(
     # git commit -m {desc} --date={date.isoformat()} --author={author}
     cmd = [
         'git', 'commit',
-        '-m', f'{desc}',
-        f'--date={date.isoformat()}',
-        f'--author={author}'
+        '-m', f'{desc}'
     ]
     name = author.split('<')[0].strip()
     email = author.split('<')[0].replace('>', '').strip()
