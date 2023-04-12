@@ -25,6 +25,7 @@ class CommitInfo:
     date: datetime.datetime
     author: str
     description: str
+    branch: str
     hash: str
     # files: list[FileInfo]
     files: list[pathlib.Path]
@@ -46,16 +47,16 @@ def fix_diff_path(old_path: pathlib.Path, new_path: pathlib.Path, diff: bytes) -
     )
 
 
-def generate_repo_info(repo_path: pathlib.Path) -> list[CommitInfo]:
-    hash_length = len(hg_api.get_hashs(cwd=repo_path))
+def generate_repo_info(repo_path: pathlib.Path, branch: str | None = None) -> list[CommitInfo]:
+    hash_length = len(hg_api.get_hashs(cwd=repo_path, branch=branch))
 
     r_data: list[CommitInfo] = []
 
     with Progress() as progress:
         task = progress.add_task("Generating Commit list...", total=hash_length)
 
-        for commit_info in hg_api.get_full_info(cwd=repo_path):
-            commit_hash, date, auther, desc, files = commit_info
+        for commit_info in hg_api.get_full_info(cwd=repo_path, branch=branch):
+            commit_hash, date, auther, desc, branch, files = commit_info
             progress.update(task, description=f"Parsing commit <{commit_hash}>")
             # files = [
             #     FileInfo(
@@ -68,6 +69,7 @@ def generate_repo_info(repo_path: pathlib.Path) -> list[CommitInfo]:
                 date=date,
                 author=auther,
                 description=desc,
+                branch=branch,
                 hash=commit_hash,
                 files=files
             ))
@@ -100,7 +102,10 @@ def transfer_repo(
                         diff = fix_diff_path(old_path, file, diff)
                     if len(diff) <= 1:
                         progress.console.print(f'[bold red]Warning Empty Diff for: [/bold red] {file}')
-                    git_api.create_file(file=file, diff=diff, cwd=dst_repo)
+                    rc, *std = git_api.create_file(file=file, diff=diff, cwd=dst_repo)
+                    if rc != 0:
+                        progress.console.print(f'[bold red]Warning Create file error: [/bold red] {commit.hash}\n{std[0]}\n{std[1]}')
+                        progress.console.print(diff)
                     git_api.add_file(file_name=file, cwd=dst_repo)
                     something_added = True
                     progress.advance(file_task)
@@ -146,8 +151,16 @@ if __name__ == '__main__':
         '-f', '--filter',
         type=pathlib.Path,
         default=pathlib.Path('.'),
-        help='A file filter'
+        help='A file filter.'
     )
+
+    parser.add_argument(
+        '-b', '--branch',
+        type=pathlib.Path,
+        default=pathlib.Path('.'),
+        help='Only apply changes from given branch.'
+    )
+
 
     args = parser.parse_args()
 
@@ -161,12 +174,15 @@ if __name__ == '__main__':
         console.print('No git repo found in the given output folder.')
         exit(-1)
 
-    data = generate_repo_info(args.repo)
+    data = generate_repo_info(args.repo, branch=args.branch)
 
     verbose = lambda *args, **kwargs: None
 
     # if args.verbose:
-    #     args.verbose = console.print
+    #     for commit in data:
+    #         if any([args.filter in file.parents or args.filter == file for file in commit.files]):
+    #             console.print(commit)
+    #     exit()
 
     branch_rc, branch_out, branch_err = git_api.create_branch(branch_name='imported', cwd=args.out)
     if branch_rc != 0:
