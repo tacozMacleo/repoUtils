@@ -68,7 +68,7 @@ def create_file(
     with tempfile.NamedTemporaryFile('wb') as temp_file:
         temp_file.write(diff)
         temp_file.flush()
-        cmd = ['git', 'apply', temp_file.name]
+        cmd = ['git', 'apply', '--allow-empty', temp_file.name]
         output = subprocess.run(
             cmd,
             capture_output=True,
