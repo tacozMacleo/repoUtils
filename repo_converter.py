@@ -27,6 +27,10 @@ class CommitInfo:
     files: list[pathlib.Path]
 
 
+def pause_script(rc, stdout, stderr) -> None:
+    reply: str = input('Press Enter to continue!')
+
+
 def shorten_path(
     filter_path: pathlib.Path,
     file_path: pathlib.Path
@@ -101,6 +105,7 @@ def transfer_repo(
     dst_repo: pathlib.Path,
     file_filter: pathlib.Path,
     reducer: bool,
+    pause: bool = False,
 ) -> None:
     something_added: bool = False
     with Progress() as progress:
@@ -113,7 +118,7 @@ def transfer_repo(
             do_last: list[tuple[pathlib.Path, str, bytes]] = []
 
             for file in commit.files:
-                if file_filter in file.parents or file_filter == file:
+                if file_filter in file.parents or file_filter == file:  # TODO: Invert!
                     progress.update(file_task, description=f'Adding: {file}')
                     diff = hg_api.get_file_diff(hash=commit.hash, file_name=file, cwd=src_repo)
 
@@ -134,8 +139,15 @@ def transfer_repo(
                     if rc != 0:
                         progress.console.print(f'[bold red]Warning Create file error: [/bold red] {commit.hash}\n{std[0]}\n{std[1]}')
                         progress.console.print(diff)
+                        if pause:
+                            pause_script(rc, *std)
 
-                    git_api.add_file(file_name=file, cwd=dst_repo)
+                    rc, *std = git_api.add_file(file_name=file, cwd=dst_repo)
+                    if rc != 0:
+                        progress.console.print(f'[bold red]Warning Add file error: [/bold red] {commit.hash}\n{std[0]}\n{std[1]}')
+                        progress.console.print(diff)
+                        if pause:
+                            pause_script(rc, *std)
                     something_added = True
                     progress.advance(file_task)
 
@@ -145,8 +157,17 @@ def transfer_repo(
                 if rc != 0:
                     progress.console.print(f'[bold red]Warning Create file error: [/bold red] {commit_hash}\n{std[0]}\n{std[1]}')
                     progress.console.print(diff)
+                    if pause:
+                        pause_script(rc, *std)
 
-                git_api.add_file(file_name=file, cwd=dst_repo)
+                rc, *std = git_api.add_file(file_name=file, cwd=dst_repo)
+
+                if rc != 0:
+                    progress.console.print(f'[bold red]Warning Add file error: [/bold red] {commit_hash}\n{std[0]}\n{std[1]}')
+                    progress.console.print(diff)
+                    if pause:
+                        pause_script(rc, *std)
+
                 something_added = True
                 progress.advance(file_task)
 
@@ -175,6 +196,11 @@ if __name__ == '__main__':
         '-s', '--shorten',
         action='store_true',
         help='Shorten the path with the filter. (Folders only)'
+    )
+    parser.add_argument(
+        '-p', '--pause',
+        action='store_true',
+        help='Pause the converter on failure.',
     )
     parser.add_argument(
         '-r', '--repo',
@@ -243,4 +269,5 @@ if __name__ == '__main__':
         dst_repo=args.out,
         file_filter=args.filter,
         reducer=args.shorten,
+        pause=args.pause,
     )
