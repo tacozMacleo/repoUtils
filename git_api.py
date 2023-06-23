@@ -9,7 +9,7 @@ first_commit_hash = ['git', 'hash-object', '-t', 'tree', '/dev/null']
 def create_branch(
     branch_name: str,
     cwd: pathlib.Path,
-):
+) -> tuple[int, str, str]:
     # git checkout -b {branch_name}
     cmd = ['git', 'checkout', '-b', branch_name]
     output = subprocess.run(cmd, capture_output=True, cwd=str(cwd))
@@ -20,7 +20,7 @@ def create_branch(
 def add_file(
     file_name: pathlib.Path,
     cwd: pathlib.Path,
-):
+) -> tuple[int, str, str]:
     # git add {file_name}
     cmd = ['git', 'add', str(file_name)]
     output = subprocess.run(cmd, capture_output=True, cwd=str(cwd))
@@ -33,7 +33,7 @@ def commit(
     author: str,
     date: datetime.datetime,
     cwd: pathlib.Path,
-):
+) -> tuple[int, str, str]:
     # git commit -m {desc} --date={date.isoformat()} --author={author}
     cmd = [
         'git', 'commit',
@@ -58,7 +58,7 @@ def create_file(
     file: pathlib.Path,
     diff: bytes,
     cwd: pathlib.Path,
-):
+) -> tuple[int, str, str]:
     # git apply {diff}
     # print(f'{cwd=}')
     # print(f'{file=}')
