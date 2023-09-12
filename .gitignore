@@ -127,4 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# VS-Code
 *.code-workspace
+
+# Human
+error_out/*
