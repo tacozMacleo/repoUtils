@@ -29,4 +29,4 @@ Added option to shorten the folder path from the output repo, by the filter.
  * [ ] Add option to convert & import all branches as once.
  * [ ] Option to show/check result with a diff.
  * [ ] Done check: `diff -qr {repo} {out}`
- * [ ] Add handle of multiline Description.
+ * [x] Add handle of multiline Description.

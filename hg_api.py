@@ -21,7 +21,7 @@ def pairwise(iterable: Iterable[Any]) -> Iterator[tuple[Any, Any]]:
     return itertools.zip_longest(iterable, iterable)
 
 
-def get_hashs(
+def get_hashes(
     cwd: pathlib.Path | str | None = None,
     branch: str | None = None,
 ) -> list[str]:
@@ -44,7 +44,7 @@ def get_file_diff(
     first: bool = False,
 ) -> bytes:
     # hg diff -r ".^:${CURRENT_HASH}" "${file}"
-    past_commit = f'{hash}^' if first is False else 'null'
+    past_commit = f'{hash}^' if first is False else first_commit_hash
     if cwd is not None:
         cwd = str(cwd)
     cmd = ['hg', 'diff', '--git', '-r', f'{past_commit}:{hash}', str(file_name)]
@@ -84,7 +84,7 @@ def get_commit_diff(
     cwd: pathlib.Path | str | None = None,
     first: bool = False,
 ) -> list[tuple[pathlib.Path, bytes]]:
-    past_commit = f'{hash}^' if first is False else 'null'
+    past_commit = f'{hash}^' if first is False else first_commit_hash
 
     if cwd is not None:
         cwd = str(cwd)
@@ -120,23 +120,39 @@ def get_full_info(
             list[pathlib.Path]
         ]
     ]:
-    splitter = '-------------------\n'
+    desc_file_splitter = '=========\n'
+    branch_splitter = '-------------------\n'
     if cwd is not None:
         cwd = str(cwd)
-    cmd = ['hg', 'log', '-r', ':', '--template', '{node}\n{date|isodate}\n{author}\n{desc}\n{branch}\n{join(files, "\n")}' + splitter]
+    cmd = ['hg', 'log', '-r', ':', '--template', (
+        '{node}\n{date|isodate}\n{author}\n{branch}\n' +
+        desc_file_splitter +
+        '{desc}\n' +
+        desc_file_splitter +
+        '{join(files, "\n")}' +
+        branch_splitter
+    )]
     if branch is not None:
         cmd += ['-b', branch]
     output = subprocess.run(cmd, capture_output=True, cwd=cwd)
-    commit_list: list[str] = output.stdout.decode().split(splitter)
+    commit_list: list[str] = output.stdout.decode().split(branch_splitter)
     return_commit_data = []
     for commit in commit_list[:-1]:
-        data = commit.split('\n')
+        info, desc, files_raw = commit.split(desc_file_splitter)
+        data = info.split('\n')
         if len(data) == 1:
             print('ERROR: ', data)
             continue
 
         date: datetime.datetime = datetime.datetime.fromisoformat(data[1])
-        files : list[pathlib.Path] = [ pathlib.Path(file) for file in data[5:]]
-        return_commit_data.append((data[0], date, data[2], data[3], data[4], files))
+        files : list[pathlib.Path] = [ pathlib.Path(file) for file in files_raw.split('\n')]
+        return_commit_data.append((
+            data[0],  # commit_hash
+            date,  # date
+            data[2],  # author
+            desc.strip(),  # Description
+            data[3],  # Branch
+            files  # List of files
+        ))
 
     return return_commit_data

@@ -53,6 +53,9 @@ def error_handle(progress, text:str, pause: bool, rc: int, stdout:str , stderr: 
 
     progress.console.print(f'[bold red]{text} [/bold red] {commit_hash}\n{stdout}\n{stderr}')
     progress.console.print(diff)
+    with open(f"error_out/{error_count}-{commit_hash}.diff", 'wb') as file:
+        file.write(diff)
+
     pause_point(pause=pause, rc=rc, stdout=stdout, stderr=stderr)
 
 
@@ -99,7 +102,7 @@ def generate_repo_info(
     repo_path: pathlib.Path,
     branch: str | None = None
 ) -> list[CommitInfo]:
-    hash_length = len(hg_api.get_hashs(cwd=repo_path, branch=branch))
+    hash_length = len(hg_api.get_hashes(cwd=repo_path, branch=branch))
 
     r_data: list[CommitInfo] = []
 
