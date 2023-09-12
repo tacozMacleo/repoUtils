@@ -40,19 +40,21 @@ def get_hashs(
 def get_file_diff(
     hash: str,
     file_name: pathlib.Path,
-    cwd: pathlib.Path | str | None = None
+    cwd: pathlib.Path | str | None = None,
+    first: bool = False,
 ) -> bytes:
     # hg diff -r ".^:${CURRENT_HASH}" "${file}"
+    past_commit = f'{hash}^' if first is False else 'null'
     if cwd is not None:
         cwd = str(cwd)
-    cmd = ['hg', 'diff', '--git', '-r', f'{hash}^:{hash}', str(file_name)]
+    cmd = ['hg', 'diff', '--git', '-r', f'{past_commit}:{hash}', str(file_name)]
     output = subprocess.run(cmd, capture_output=True, cwd=cwd)
     return output.stdout
 
 
 def get_info(
     hash: str,
-    cwd: pathlib.Path | str | None = None
+    cwd: pathlib.Path | str | None = None,
 ) -> tuple[datetime.datetime, str, str, list[pathlib.Path]]:
     # hg log -r "${CURRENT_HASH}" --template '{date|rfc822date}\n{author|email}\n{desc}'
     if cwd is not None:
@@ -67,7 +69,7 @@ def get_info(
 
 def get_file_list(
     hash: str,
-    cwd: pathlib.Path | str | None = None
+    cwd: pathlib.Path | str | None = None,
 ) -> list[pathlib.Path]:
     # hg log -r "${HASH}" -v --template '{join(files, "\n")}'
     if cwd is not None:
@@ -79,12 +81,14 @@ def get_file_list(
 
 def get_commit_diff(
     hash: str,
-    cwd: pathlib.Path | str | None = None
+    cwd: pathlib.Path | str | None = None,
+    first: bool = False,
 ) -> list[tuple[pathlib.Path, bytes]]:
+    past_commit = f'{hash}^' if first is False else 'null'
 
     if cwd is not None:
         cwd = str(cwd)
-    cmd = ['hg', 'diff', '--git', '-r', f'{hash}^:{hash}']
+    cmd = ['hg', 'diff', '--git', '-r', f'{past_commit}:{hash}']
     output = subprocess.run(cmd, capture_output=True, cwd=cwd)
     try:
         temp = re.split(r'(diff --git[^\n]*\n)', output.stdout.decode())[1:]
