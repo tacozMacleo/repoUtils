@@ -133,3 +133,4 @@ dmypy.json
 
 # Human
 error_out/*
+test_repo/
