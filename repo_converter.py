@@ -10,6 +10,7 @@ from typing import Any, Callable
 
 from rich.progress import Progress  # type: ignore
 from rich.console import Console  # type: ignore
+# from rich.prompt import Confirm
 
 import hg_api
 import git_api
@@ -36,13 +37,14 @@ def touch_file(file: pathlib.Path, cwd: pathlib.Path) -> None:
     new_file.touch()
 
 
-def pause_script(rc: int, stdout: str , stderr: str) -> None:
+def pause_script(progress, rc: int, stdout: str , stderr: str) -> None:
+    # Confirm.ask('Press Enter to continue!', console=progress.console)
     reply: str = input('Press Enter to continue!')
 
 
-def pause_point(pause: bool, rc: int, stdout:str , stderr: str) -> None:
+def pause_point(progress, pause: bool, rc: int, stdout:str , stderr: str) -> None:
     if pause:
-        pause_script(rc, stdout, stderr)
+        pause_script(progress, rc, stdout, stderr)
 
 
 def error_handle(progress, text:str, pause: bool, rc: int, stdout:str , stderr: str, commit_hash, diff) -> None:
@@ -56,7 +58,7 @@ def error_handle(progress, text:str, pause: bool, rc: int, stdout:str , stderr: 
     with open(f"error_out/{error_count}-{commit_hash}.diff", 'wb') as file:
         file.write(diff)
 
-    pause_point(pause=pause, rc=rc, stdout=stdout, stderr=stderr)
+    pause_point(progress=progress, pause=pause, rc=rc, stdout=stdout, stderr=stderr)
 
 
 def shorten_path(
