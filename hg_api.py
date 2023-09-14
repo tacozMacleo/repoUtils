@@ -6,6 +6,7 @@ import subprocess
 
 from typing import Iterable, Iterator, Any
 
+from data_structures import CommitInfo
 
 first_commit_hash = 'null'
 
@@ -110,16 +111,7 @@ def get_commit_diff(
 def get_full_info(
     cwd: pathlib.Path | str | None = None,
     branch: str | None = None,
-) -> list[
-        tuple[
-            str,
-            datetime.datetime,
-            str,
-            str,
-            str,
-            list[pathlib.Path]
-        ]
-    ]:
+) -> list[CommitInfo]:
     desc_file_splitter = '=========\n'
     branch_splitter = '-------------------\n'
     if cwd is not None:
@@ -146,13 +138,15 @@ def get_full_info(
 
         date: datetime.datetime = datetime.datetime.fromisoformat(data[1])
         files : list[pathlib.Path] = [ pathlib.Path(file) for file in files_raw.split('\n')]
-        return_commit_data.append((
-            data[0],  # commit_hash
-            date,  # date
-            data[2],  # author
-            desc.strip(),  # Description
-            data[3],  # Branch
-            files  # List of files
-        ))
+        return_commit_data.append(
+            CommitInfo(
+                hash=data[0],
+                date=date,
+                author=data[2],
+                description=desc.strip(),
+                branch=data[3],
+                files=files,
+            )
+        )
 
     return return_commit_data

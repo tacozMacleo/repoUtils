@@ -15,20 +15,12 @@ from rich.console import Console  # type: ignore
 import hg_api
 import git_api
 
+from data_structures import CommitInfo
+
 console = Console()
 
 
 error_count: int = 0
-
-
-@dataclass
-class CommitInfo:
-    date: datetime.datetime
-    author: str
-    description: str
-    branch: str
-    hash: str
-    files: list[pathlib.Path]
 
 
 def touch_file(file: pathlib.Path, cwd: pathlib.Path) -> None:
@@ -106,28 +98,9 @@ def generate_repo_info(
 ) -> list[CommitInfo]:
     hash_length = len(hg_api.get_hashes(cwd=repo_path, branch=branch))
 
-    r_data: list[CommitInfo] = []
-
     with Progress() as progress:
         task = progress.add_task("Generating Commit list...", total=hash_length)
-
-        for commit_info in hg_api.get_full_info(cwd=repo_path, branch=branch):
-            commit_hash, date, author, desc, branch, files = commit_info
-            progress.update(task, description=f"Parsing commit <{commit_hash}>")
-
-            r_data.append(CommitInfo(
-                date=date,
-                author=author,
-                description=desc,
-                branch=branch,
-                hash=commit_hash,
-                files=files
-            ))
-            progress.advance(task)
-        progress.update(task, description='All commits parsed.')
-
-    return r_data
-
+        return hg_api.get_full_info(cwd=repo_path, branch=branch)
 
 def transfer_repo(
     data: list[CommitInfo],
