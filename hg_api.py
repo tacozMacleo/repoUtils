@@ -10,6 +10,8 @@ from data_structures import CommitInfo
 
 first_commit_hash = 'null'
 
+# hg help revsets
+# https://book.mercurial-scm.org/read/template.html
 
 def pairwise(iterable: Iterable[Any]) -> Iterator[tuple[Any, Any]]:
     """
@@ -20,6 +22,59 @@ def pairwise(iterable: Iterable[Any]) -> Iterator[tuple[Any, Any]]:
     """
     iterable = iter(iterable)
     return itertools.zip_longest(iterable, iterable)
+
+
+def get_all_branches(
+    cwd: pathlib.Path | str | None = None,
+) -> list[str]:
+    # hg log -r : --template '{node}\n'
+    if cwd is not None:
+        cwd = str(cwd)
+
+    cmd = ["hg", "branches", "-c", "--template", "{branch}\n"]
+
+    output = subprocess.run(cmd, capture_output=True, cwd=cwd)
+    return list(filter(lambda x: bool(x), output.stdout.decode().split('\n')))
+
+
+
+def get_open_branches(
+    cwd: pathlib.Path | str | None = None,
+) -> list[str]:
+    # hg log -r : --template '{node}\n'
+    if cwd is not None:
+        cwd = str(cwd)
+
+    cmd = ["hg", "branches", "--template", "{branch}\n"]
+
+    output = subprocess.run(cmd, capture_output=True, cwd=cwd)
+    return list(filter(lambda x: bool(x), output.stdout.decode().split('\n')))
+
+
+def get_closed_branches(
+    cwd: pathlib.Path | str | None = None,
+) -> list[str]:
+    # hg log -r : --template '{node}\n'
+    if cwd is not None:
+        cwd = str(cwd)
+
+    cmd = ["hg", "branches", "-c", "-r", 'closed()', "--template", "{branch}\n"]
+
+    output = subprocess.run(cmd, capture_output=True, cwd=cwd)
+    return list(filter(lambda x: bool(x), output.stdout.decode().split('\n')))
+
+
+def get_current_branch(
+    cwd: pathlib.Path | str | None = None,
+) -> str:
+    # hg log -r : --template '{node}\n'
+    if cwd is not None:
+        cwd = str(cwd)
+
+    cmd = ["hg", "branch"]
+
+    output = subprocess.run(cmd, capture_output=True, cwd=cwd)
+    return output.stdout.decode().strip()
 
 
 def get_hashes(
@@ -120,6 +175,14 @@ def get_full_info(
         '{node}\n{date|isodate}\n{author}\n{branch}\n' +
         desc_file_splitter +
         '{desc}\n' +
+        # desc_file_splitter +
+        # '{join(parents, "||")}' +
+        # desc_file_splitter +
+        # '{join(tags, "||")}' +
+        # desc_file_splitter +
+        # '{join(file_adds, "||")}' +
+        # desc_file_splitter +
+        # '{join(file_dels, "||")}' +
         desc_file_splitter +
         '{join(files, "\n")}' +
         branch_splitter
