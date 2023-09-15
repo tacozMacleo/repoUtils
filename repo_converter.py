@@ -10,7 +10,7 @@ from typing import Any, Callable
 
 from rich.progress import Progress  # type: ignore
 from rich.console import Console  # type: ignore
-# from rich.prompt import Confirm
+from rich.prompt import Confirm
 
 import hg_api
 import git_api
