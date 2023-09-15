@@ -16,6 +16,7 @@ import hg_api
 import git_api
 
 from data_structures import CommitInfo
+from rich_helpers import rich_input
 
 console = Console()
 
@@ -30,8 +31,10 @@ def touch_file(file: pathlib.Path, cwd: pathlib.Path) -> None:
 
 
 def pause_script(progress, rc: int, stdout: str , stderr: str) -> None:
-    # Confirm.ask('Press Enter to continue!', console=progress.console)
-    reply: str = input('Press Enter to continue!')
+    rich_input(
+        'Press Enter to continue!',
+        progress=progress
+    )
 
 
 def pause_point(progress, pause: bool, rc: int, stdout:str , stderr: str) -> None:
@@ -92,111 +95,131 @@ def shorten_diff_file_path(
     )
 
 
-def generate_repo_info(
-    repo_path: pathlib.Path,
-    branch: str | None = None
-) -> list[CommitInfo]:
-    hash_length = len(hg_api.get_hashes(cwd=repo_path, branch=branch))
+class RepoConverter:
 
-    with Progress() as progress:
-        task = progress.add_task("Generating Commit list...", total=hash_length)
-        return hg_api.get_full_info(cwd=repo_path, branch=branch)
+    src_repo: pathlib.Path
+    repo_branch_info: dict[str, list[CommitInfo]]
 
-def transfer_repo(
-    data: list[CommitInfo],
-    src_repo: pathlib.Path,
-    dst_repo: pathlib.Path,
-    file_filter: pathlib.Path,
-    reducer: bool,
-    pause: bool = False,
-) -> None:
-    something_added: bool = False
-    with Progress() as progress:
-        task_commit = progress.add_task(f"Checking commit...", total=len(data))
+    def __init__(
+        self,
+        src_repo: pathlib.Path,
+    ):
+        self.src_repo = src_repo
+        self.repo_branch_info = {}
+        self._generate_repo_info()
 
-        first_commit = True
+    def _generate_repo_info(self):
+        branches = hg_api.get_open_branches(cwd=self.src_repo)
+        branches += hg_api.get_closed_branches(cwd=self.src_repo)
 
-        for commit in data:
-            progress.update(task_commit, description=f"Checking <{commit.hash}>")
-            file_task = progress.add_task(f"Checking files.", total=len(commit.files))
-
-            do_last: list[tuple[pathlib.Path, str, bytes]] = []
-
-            for file in commit.files:
-                if file_filter not in file.parents and file_filter != file:
-                    continue
-                progress.update(file_task, description=f'Adding: {file}')
-                diff = hg_api.get_file_diff(
-                    hash=commit.hash,
-                    file_name=file,
-                    cwd=src_repo,
-                    first=first_commit,
+        with Progress() as progress:
+            task_branch = progress.add_task("Loading branch:...", total=len(branches))
+            for branch in branches:
+                progress.update(task_branch, description=f"Loading: {branch}")
+                self.repo_branch_info[branch] = hg_api.get_full_info(
+                    cwd=self.src_repo, branch=branch
                 )
+                progress.advance(task_branch)
 
-                if reducer:
-                    old_path = file
-                    file = shorten_path(file_filter, file)
-                    diff = shorten_diff_file_path(file_filter, diff)
+    def transfer_repo(
+        self,
+        branch: str,
+        dst_repo: pathlib.Path,
+        file_filter: pathlib.Path,
+        reducer: bool,
+        pause: bool = False,
+    ) -> None:
+        self.file_filter = file_filter
+        self.reducer = reducer
+        self.pause = pause
 
-                if len(diff) <= 1:
-                    progress.console.print(f'[bold red]Warning Empty Diff for: [/bold red] {file}')
-                    # touch_file(file=file, cwd=dst_repo)
+        something_added: bool = False
+        with Progress() as progress:
+            task_commit = progress.add_task(f"Checking commit...", total=len(self.repo_branch_info))
 
-                if b'deleted file ' in diff:
-                    do_last.append((file, commit.hash, diff))
-                    continue
+            first_commit = True
 
-                rc, *std = git_api.create_file(file=file, diff=diff, cwd=dst_repo)
+            for commit in self.repo_branch_info.get(branch, []):
+                progress.update(task_commit, description=f"Checking <{commit.hash}>")
+                file_task = progress.add_task(f"Checking files.", total=len(commit.files))
 
-                error_handle(
-                    progress=progress, text="Warning Create file error:",
-                    pause=pause, rc=rc, stdout=std[0], stderr=std[1],
-                    commit_hash=commit.hash, diff=diff
-                )
+                do_last: list[tuple[pathlib.Path, str, bytes]] = []
 
-                rc, *std = git_api.add_file(file_name=file, cwd=dst_repo)
-                error_handle(
-                    progress=progress, text="Warning Add file error",
-                    pause=pause, rc=rc, stdout=std[0], stderr=std[1],
-                    commit_hash=commit.hash, diff=diff
-                )
+                for file in commit.files:
+                    if file_filter not in file.parents and file_filter != file:
+                        continue
+                    progress.update(file_task, description=f'Adding: {file}')
+                    diff = hg_api.get_file_diff(
+                        hash=commit.hash,
+                        file_name=file,
+                        cwd=self.src_repo,
+                        first=first_commit,
+                    )
 
-                something_added = True
-                progress.advance(file_task)
+                    if reducer:
+                        old_path = file
+                        file = shorten_path(file_filter, file)
+                        diff = shorten_diff_file_path(file_filter, diff)
 
-            for file, commit_hash, diff in do_last:
-                rc, *std = git_api.create_file(file=file, diff=diff, cwd=dst_repo)
+                    if len(diff) <= 1:
+                        progress.console.print(f'[bold red]Warning Empty Diff for: [/bold red] {file}')
+                        # touch_file(file=file, cwd=dst_repo)
 
-                error_handle(
-                    progress=progress, text="end: Warning Create file error:",
-                    pause=pause, rc=rc, stdout=std[0], stderr=std[1],
-                    commit_hash=commit_hash, diff=diff
-                )
+                    if b'deleted file ' in diff:
+                        do_last.append((file, commit.hash, diff))
+                        continue
 
-                rc, *std = git_api.add_file(file_name=file, cwd=dst_repo)
+                    rc, *std = git_api.create_file(file=file, diff=diff, cwd=dst_repo)
 
-                error_handle(
-                    progress=progress, text="end: Warning Add file error:",
-                    pause=pause, rc=rc, stdout=std[0], stderr=std[1],
-                    commit_hash=commit_hash, diff=diff
-                )
+                    error_handle(
+                        progress=progress, text="Warning Create file error:",
+                        pause=pause, rc=rc, stdout=std[0], stderr=std[1],
+                        commit_hash=commit.hash, diff=diff
+                    )
 
-                something_added = True
-                progress.advance(file_task)
+                    rc, *std = git_api.add_file(file_name=file, cwd=dst_repo)
+                    error_handle(
+                        progress=progress, text="Warning Add file error",
+                        pause=pause, rc=rc, stdout=std[0], stderr=std[1],
+                        commit_hash=commit.hash, diff=diff
+                    )
 
-            first_commit = False
+                    something_added = True
+                    progress.advance(file_task)
 
-            progress.update(file_task, visible=False)
+                for file, commit_hash, diff in do_last:
+                    rc, *std = git_api.create_file(file=file, diff=diff, cwd=dst_repo)
 
-            if something_added:
-                git_api.commit(
-                    desc=commit.description,
-                    author=commit.author,
-                    date=commit.date,
-                    cwd=dst_repo,
-                )
-            progress.advance(task_commit)
-            something_added = False
+                    error_handle(
+                        progress=progress, text="end: Warning Create file error:",
+                        pause=pause, rc=rc, stdout=std[0], stderr=std[1],
+                        commit_hash=commit_hash, diff=diff
+                    )
+
+                    rc, *std = git_api.add_file(file_name=file, cwd=dst_repo)
+
+                    error_handle(
+                        progress=progress, text="end: Warning Add file error:",
+                        pause=pause, rc=rc, stdout=std[0], stderr=std[1],
+                        commit_hash=commit_hash, diff=diff
+                    )
+
+                    something_added = True
+                    progress.advance(file_task)
+
+                first_commit = False
+
+                progress.update(file_task, visible=False)
+
+                if something_added:
+                    git_api.commit(
+                        desc=commit.description,
+                        author=commit.author,
+                        date=commit.date,
+                        cwd=dst_repo,
+                    )
+                progress.advance(task_commit)
+                something_added = False
 
 
 if __name__ == '__main__':
@@ -260,7 +283,7 @@ if __name__ == '__main__':
         console.print('No git repo found in the given output folder.')
         exit(-1)
 
-    data = generate_repo_info(args.repo, branch=args.branch)
+    the_repo = RepoConverter(args.repo)
 
     verbose = lambda *args, **kwargs: None
 
@@ -276,11 +299,12 @@ if __name__ == '__main__':
         console.print('Did you remember to create a git repo and make the first commit?')
         console.print(branch_out)
         console.print(branch_err)
-        exit(-3)
+        if not Confirm.ask('Continue anyway?'):
+            console.print('Aborting!')
+            exit(-3)
 
-    transfer_repo(
-        data=data,
-        src_repo=args.repo,
+    the_repo.transfer_repo(
+        branch=hg_api.get_current_branch(cwd=args.repo),
         dst_repo=args.out,
         file_filter=args.filter,
         reducer=args.shorten,
