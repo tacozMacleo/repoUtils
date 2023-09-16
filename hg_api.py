@@ -167,24 +167,21 @@ def get_full_info(
     cwd: pathlib.Path | str | None = None,
     branch: str | None = None,
 ) -> list[CommitInfo]:
-    desc_file_splitter = '=========\n'
-    branch_splitter = '-------------------\n'
+    branch_splitter: str = '-------------------\n'
+    r_split: str = '||'
     if cwd is not None:
         cwd = str(cwd)
     cmd = ['hg', 'log', '-r', ':', '--template', (
-        '{node}\n{date|isodate}\n{author}\n{branch}\n' +
-        desc_file_splitter +
+        '{node}\n' +
+        '{date|isodate}\n' +
+        '{author}\n' +
+        '{branch}\n' +
+        '{join(parents, "'+ r_split +'")}\n' +
+        '{join(tags, "'+ r_split +'")}\n' +
+        '{join(file_adds, "'+ r_split +'")}\n' +
+        '{join(file_dels, "'+ r_split +'")}\n' +
+        '{join(files, "'+ r_split +'")}\n' +
         '{desc}\n' +
-        # desc_file_splitter +
-        # '{join(parents, "||")}' +
-        # desc_file_splitter +
-        # '{join(tags, "||")}' +
-        # desc_file_splitter +
-        # '{join(file_adds, "||")}' +
-        # desc_file_splitter +
-        # '{join(file_dels, "||")}' +
-        desc_file_splitter +
-        '{join(files, "\n")}' +
         branch_splitter
     )]
     if branch is not None:
@@ -192,23 +189,22 @@ def get_full_info(
     output = subprocess.run(cmd, capture_output=True, cwd=cwd)
     commit_list: list[str] = output.stdout.decode().split(branch_splitter)
     return_commit_data = []
+    print(output.stderr.decode())
     for commit in commit_list[:-1]:
-        info, desc, files_raw = commit.split(desc_file_splitter)
-        data = info.split('\n')
-        if len(data) == 1:
-            print('ERROR: ', data)
-            continue
+        node, r_date, author, branch, r_parents, r_tags, r_file_adds, r_file_dels, r_file, desc = commit.split('\n', 9)
 
-        date: datetime.datetime = datetime.datetime.fromisoformat(data[1])
-        files : list[pathlib.Path] = [ pathlib.Path(file) for file in files_raw.split('\n')]
         return_commit_data.append(
             CommitInfo(
-                hash=data[0],
-                date=date,
-                author=data[2],
+                hash=node.strip(),
+                date=datetime.datetime.fromisoformat(r_date),
+                author=author.strip(),
                 description=desc.strip(),
-                branch=data[3],
-                files=files,
+                branch=branch.strip(),
+                files=[ pathlib.Path(file) for file in r_file.split(r_split)] if r_file else [],
+                file_adds=[ pathlib.Path(file) for file in r_file_adds.split(r_split)] if r_file_adds else [],
+                file_dels=[ pathlib.Path(file) for file in r_file_dels.split(r_split)] if r_file_dels else [],
+                tags=r_tags.split(r_split),
+                parents=r_parents.split(r_split)
             )
         )
 
